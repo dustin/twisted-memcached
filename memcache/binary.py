@@ -24,6 +24,22 @@ class Request(object):
         self.extra = ''
         self.key = ''
 
+class Response(object):
+
+    def __init__(self, req, cas=0, status=0, key='', extra='', data=''):
+        self.req = req
+        self.cas = cas
+        self.key = key
+        self.extra= extra
+        self.status = status
+        self.data = data
+
+class GetResponse(Response):
+
+    def __init__(self, req, flags, cas=0, status=0, key='', data=''):
+        extra = struct.pack(GET_RES_FMT, flags)
+        super(GetResponse, self).__init__(req, cas, status, key, extra, data)
+
 class MemcachedError(Exception):
     pass
 
@@ -75,33 +91,23 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
     def _completed(self, data):
         try:
             request = self.currentReq
-            self.handlers.get(request.opcode,
-                              self.unknownCommand)(request, data, self)
+            res = self.handlers.get(request.opcode,
+                                    self.unknownCommand)(request, data)
+            self._respond(res)
         except MemcachedError, e:
-            self._respondError(self.currentReq, e.code, e.msg)
+            self._respond(Response(self.currentReq, status=e.code, data=e.msg))
         except:
             log.err()
 
         return self.getInitialState()
 
-    def _respondError(self, req, errval, msg=''):
-        header = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, req.opcode,
-                             0, 0, 0, errval, len(msg),
-                             req.opaque, 0)
-        self.transport.writeSequence([header, msg])
-
-    def sendAck(self, req, cas):
-        header = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, req.opcode,
-                             0, 0, 0, 0, 0,
-                             req.opaque, cas)
-        self.transport.write(header)
-
-    def sendValue(self, req, flags, cas, value):
-        header = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, req.opcode,
-                             GET_RES_SIZE, 0, 0, 0, len(value) + GET_RES_SIZE,
-                             req.opaque, cas)
-        extra = struct.pack(GET_RES_FMT, flags)
-        self.transport.writeSequence([header, extra, value])
+    def _respond(self, res):
+        # magic, opcode, keylen, extralen, datatype, status, bodylen, opaque, cas
+        header = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, res.req.opcode,
+                             len(res.key), len(res.extra), 0, res.status,
+                             len(res.data) + len(res.extra), res.req.opaque,
+                             res.cas)
+        self.transport.writeSequence([header, res.extra, res.data])
 
     def unknownCommand(self, request, data, prot):
         raise MemcachedUnknownCommand()

@@ -16,17 +16,17 @@ class DictStorage(object):
     def __init__(self):
         self.d = {}
 
-    def doGet(self, req, data, prot):
+    def doGet(self, req, data):
         try:
             exp, flags, cas, val = self.d[req.key]
-            prot.sendValue(req, flags, cas, val)
+            return binary.GetResponse(req, flags, cas, data=val)
         except KeyError:
             raise binary.MemcachedNotFound()
 
-    def doSet(self, req, data, prot):
+    def doSet(self, req, data):
         flags, exp = struct.unpack(constants.SET_PKT_FMT, req.extra)
         self.d[req.key] = (exp, flags, 0, data)
-        prot.sendAck(req, 0)
+        return binary.Response(req)
 
 storage = DictStorage()
 
