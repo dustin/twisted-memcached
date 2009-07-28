@@ -111,5 +111,5 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
                              res.cas)
         self.transport.writeSequence([header, res.extra, res.data])
 
-    def unknownCommand(self, request, data, prot):
+    def unknownCommand(self, request, data):
         raise MemcachedUnknownCommand()
