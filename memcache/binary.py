@@ -40,6 +40,9 @@ class GetResponse(Response):
         extra = struct.pack(GET_RES_FMT, flags)
         super(GetResponse, self).__init__(req, cas, status, key, extra, data)
 
+class MemcachedDisconnect(Exception):
+    """Raise this exception from your handler to drop the client connection."""
+
 class MemcachedError(Exception):
     pass
 
@@ -104,7 +107,12 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
             self._respond(Response(self.currentReq,
                                    status=e.value.code, data=e.value.msg))
 
+        def _exit(e):
+            e.trap(SystemExit, MemcachedDisconnect)
+            self.transport.loseConnection()
+
         d.addCallbacks(_c, _e)
+        d.addErrback(_exit)
         d.addErrback(log.err)
 
         return self.getInitialState()

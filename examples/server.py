@@ -35,12 +35,19 @@ class DictStorage(object):
 
 storage = DictStorage()
 
+def ex(*a):
+    print "Shutting down a client."
+    raise binary.MemcachedDisconnect()
+    # this also works, but apparently confuses people.
+    # sys.exit(0)
+
 class ExampleBinaryServer(binary.BinaryServerProtocol):
 
     handlers = {
         constants.CMD_GET: storage.doGet,
         constants.CMD_SET: storage.doSet,
-        constants.CMD_DELETE: storage.doDelete
+        constants.CMD_DELETE: storage.doDelete,
+        constants.CMD_QUIT: ex
         }
 
 factory = protocol.Factory()
