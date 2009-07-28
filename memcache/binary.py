@@ -93,6 +93,8 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
             request = self.currentReq
             res = self.handlers.get(request.opcode,
                                     self.unknownCommand)(request, data)
+            if not res:
+                res = Response(request)
             self._respond(res)
         except MemcachedError, e:
             self._respond(Response(self.currentReq, status=e.code, data=e.msg))

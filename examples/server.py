@@ -26,12 +26,10 @@ class DictStorage(object):
     def doSet(self, req, data):
         flags, exp = struct.unpack(constants.SET_PKT_FMT, req.extra)
         self.d[req.key] = (exp, flags, 0, data)
-        return binary.Response(req)
 
     def doDelete(self, req, data):
         if self.d.has_key(req.key):
             del self.d[req.key]
-            return binary.Response(req)
         else:
             raise binary.MemcachedNotFound()
 
