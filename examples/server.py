@@ -28,13 +28,21 @@ class DictStorage(object):
         self.d[req.key] = (exp, flags, 0, data)
         return binary.Response(req)
 
+    def doDelete(self, req, data):
+        if self.d.has_key(req.key):
+            del self.d[req.key]
+            return binary.Response(req)
+        else:
+            raise binary.MemcachedNotFound()
+
 storage = DictStorage()
 
 class ExampleBinaryServer(binary.BinaryServerProtocol):
 
     handlers = {
         constants.CMD_GET: storage.doGet,
-        constants.CMD_SET: storage.doSet
+        constants.CMD_SET: storage.doSet,
+        constants.CMD_DELETE: storage.doDelete
         }
 
 factory = protocol.Factory()
