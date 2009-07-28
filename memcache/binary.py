@@ -126,4 +126,5 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
         self.transport.writeSequence([header, res.extra, res.data])
 
     def unknownCommand(self, request, data):
+        log.msg("Got an unknown request for %s" % hex(request.opcode))
         raise MemcachedUnknownCommand()
