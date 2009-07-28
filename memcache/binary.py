@@ -89,17 +89,23 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
                                  - self.currentReq.keylen)
 
     def _completed(self, data):
-        try:
-            request = self.currentReq
-            res = self.handlers.get(request.opcode,
-                                    self.unknownCommand)(request, data)
+        request = self.currentReq
+        d = defer.maybeDeferred(self.handlers.get(request.opcode,
+                                                  self.unknownCommand),
+                                request, data)
+
+        def _c(res):
             if not res:
                 res = Response(request)
             self._respond(res)
-        except MemcachedError, e:
-            self._respond(Response(self.currentReq, status=e.code, data=e.msg))
-        except:
-            log.err()
+
+        def _e(e):
+            e.trap(MemcachedError)
+            self._respond(Response(self.currentReq,
+                                   status=e.value.code, data=e.value.msg))
+
+        d.addCallbacks(_c, _e)
+        d.addErrback(log.err)
 
         return self.getInitialState()
 
