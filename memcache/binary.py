@@ -58,6 +58,10 @@ class MemcachedExists(MemcachedError):
     code = ERR_EXISTS
     msg = "Exists"
 
+class MemcachedNotStored(MemcachedError):
+    code = ERR_NOT_STORED
+    msg = "Not stored"
+
 class BinaryServerProtocol(stateful.StatefulProtocol):
     """Protocol handling for acting like a memcached server."""
 
