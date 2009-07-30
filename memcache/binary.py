@@ -101,21 +101,22 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
                                                   self.unknownCommand),
                                 request, data)
 
-        def _c(res):
+        def _c(res, req):
             if not res:
-                res = Response(request)
+                res = Response(req)
             self._respond(res)
 
-        def _e(e):
+        def _e(e, req):
             e.trap(MemcachedError)
-            self._respond(Response(self.currentReq,
+            self._respond(Response(req,
                                    status=e.value.code, data=e.value.msg))
 
         def _exit(e):
             e.trap(SystemExit, MemcachedDisconnect)
             self.transport.loseConnection()
 
-        d.addCallbacks(_c, _e)
+        d.addCallback(_c, self.currentReq)
+        d.addErrback(_e, self.currentReq)
         d.addErrback(_exit)
         d.addErrback(log.err)
 
