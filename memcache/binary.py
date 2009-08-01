@@ -34,6 +34,16 @@ class Response(object):
         self.status = status
         self.data = data
 
+    def toSequence(self):
+        """Convert the response to a sequence for writing."""
+        res = self
+        req = self.req
+        hdr = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, req.opcode,
+                          len(res.key), len(res.extra), 0, res.status,
+                          len(res.data) + len(res.extra), req.opaque,
+                          res.cas)
+        return [hdr, self.extra, self.data]
+
 class GetResponse(Response):
 
     def __init__(self, req, flags, cas=0, status=0, key='', data=''):
@@ -123,12 +133,7 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
         return self.getInitialState()
 
     def _respond(self, res):
-        # magic, opcode, keylen, extralen, datatype, status, bodylen, opaque, cas
-        header = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, res.req.opcode,
-                             len(res.key), len(res.extra), 0, res.status,
-                             len(res.data) + len(res.extra), res.req.opaque,
-                             res.cas)
-        self.transport.writeSequence([header, res.extra, res.data])
+        self.transport.writeSequence(res.toSequence())
 
     def unknownCommand(self, request, data):
         log.msg("Got an unknown request for %s" % hex(request.opcode))
