@@ -132,12 +132,28 @@ class TestServerProtocol(binary.BinaryServerProtocol):
         constants.CMD_QUIT: testServer.quit
         }
 
+    def __init__(self):
+        self.responses = []
+
+    def _respond(self, res):
+        self.responses.append(res)
+        binary.BinaryServerProtocol._respond(self, res)
+
 class BinaryServerProtocolTest(unittest.TestCase):
 
     def setUp(self):
         self.prot = TestServerProtocol()
         self.trans = TestTransport()
         self.prot.makeConnection(self.trans)
+
+    def assertResponses(self, responses):
+        for g,e in zip(self.prot.responses, responses):
+            for k in e:
+                if '.' in k:
+                    gotval = reduce(getattr, k.split('.'), g)
+                else:
+                    gotval = getattr(g, k)
+                self.assertEquals(e[k], gotval)
 
     def mkReq(self, op, key='', extra='', data='', opaque=0, cas=0):
         keylen = len(key)
@@ -151,6 +167,7 @@ class BinaryServerProtocolTest(unittest.TestCase):
 
     def test_noop(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_NOOP))
+        self.assertResponses([{'req.opcode': binary.CMD_NOOP, 'status': 0}])
 
     def test_quit(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_QUIT))
@@ -158,14 +175,17 @@ class BinaryServerProtocolTest(unittest.TestCase):
 
     def test_unhandled(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_STAT))
+        self.assertResponses([{'status': binary.ERR_UNKNOWN_CMD}])
 
     def test_get(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_GET, key='x'))
+        self.assertResponses([{'data': 'response'}])
 
     def test_set(self):
         extra = struct.pack(binary.SET_PKT_FMT, 8184, 1984)
         self.prot.dataReceived(self.mkReq(binary.CMD_SET, key='x',
                                           extra=extra, data='y'))
+        self.assertResponses([{'status': binary.ERR_NOT_STORED}])
 
     def test_bad_req(self):
         self.prot.dataReceived("x" * constants.MIN_RECV_PACKET)
