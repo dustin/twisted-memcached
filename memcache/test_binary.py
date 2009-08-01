@@ -1,6 +1,10 @@
+import sys
 import struct
 
+from zope.interface import implements
+
 from twisted.trial import unittest
+from twisted.internet import interfaces
 
 from memcache import binary, constants
 
@@ -77,3 +81,92 @@ class GetResponseTest(unittest.TestCase):
                     data]
 
         self.assertEquals(expected, seq)
+
+class TestTransport(object):
+
+    implements(interfaces.ITransport)
+
+    disconnecting = False
+
+    def __init__(self):
+        self.received = []
+        self.disconnected = 0
+
+    def write(self, data):
+        self.received.append(data)
+
+    def writeSequence(self, data):
+        self.received.extend(data)
+
+    def loseConnection(self):
+        self.disconnected += 1
+
+    def getPeer(self):
+        return None
+
+    def getHost(self):
+        return None
+
+class TestServer(object):
+
+    def noop(self, req, data):
+        pass
+
+    def get(self, req, data):
+        return binary.GetResponse(req, 9282, data='response')
+
+    def set(self, req, data):
+        raise binary.MemcachedNotStored()
+
+    def quit(self, req, data):
+        sys.exit(0)
+
+testServer = TestServer()
+
+class TestServerProtocol(binary.BinaryServerProtocol):
+
+    handlers = {
+        constants.CMD_NOOP: testServer.noop,
+        constants.CMD_GET:  testServer.get,
+        constants.CMD_SET:  testServer.set,
+        constants.CMD_QUIT: testServer.quit
+        }
+
+class BinaryServerProtocolTest(unittest.TestCase):
+
+    def setUp(self):
+        self.prot = TestServerProtocol()
+        self.trans = TestTransport()
+        self.prot.makeConnection(self.trans)
+
+    def mkReq(self, op, key='', extra='', data='', opaque=0, cas=0):
+        keylen = len(key)
+        extralen = len(extra)
+        bodylen = len(data)
+        pkt = struct.pack(binary.REQ_PKT_FMT, binary.REQ_MAGIC_BYTE,
+                          op, keylen, extralen, 0,
+                          bodylen, opaque, cas)
+
+        return pkt + extra + data
+
+    def test_noop(self):
+        self.prot.dataReceived(self.mkReq(binary.CMD_NOOP))
+
+    def test_quit(self):
+        self.prot.dataReceived(self.mkReq(binary.CMD_QUIT))
+        self.assertEquals(1, self.trans.disconnected)
+
+    def test_unhandled(self):
+        self.prot.dataReceived(self.mkReq(binary.CMD_STAT))
+
+    def test_get(self):
+        self.prot.dataReceived(self.mkReq(binary.CMD_GET, key='x'))
+
+    def test_set(self):
+        extra = struct.pack(binary.SET_PKT_FMT, 8184, 1984)
+        self.prot.dataReceived(self.mkReq(binary.CMD_SET, key='x',
+                                          extra=extra, data='y'))
+
+    def test_bad_req(self):
+        self.prot.dataReceived("x" * constants.MIN_RECV_PACKET)
+        self.assertEquals(1, self.trans.disconnected)
