@@ -50,3 +50,30 @@ class ResponseTest(unittest.TestCase):
                     data]
 
         self.assertEquals(expected, seq)
+
+class GetResponseTest(unittest.TestCase):
+
+    def test_toSequence(self):
+        opaque = 885932158
+        cas = 82385929
+        flags = 82859
+        pkt = struct.pack(binary.REQ_PKT_FMT, binary.REQ_MAGIC_BYTE,
+                          binary.CMD_STAT, 0, 0, 0,
+                          0, opaque, 0)
+
+        req = binary.Request(pkt)
+
+        key = "some_key"
+        data = "some data"
+        res = binary.GetResponse(req, flags, cas, key=key, data=data)
+
+        seq = res.toSequence()
+        esize = struct.calcsize(binary.GET_RES_FMT)
+        expected = [struct.pack(binary.RES_PKT_FMT, binary.RES_MAGIC_BYTE,
+                                res.req.opcode, len(key), esize, 0, 0,
+                                len(data) + esize,
+                                opaque, cas),
+                    struct.pack(binary.GET_RES_FMT, flags),
+                    data]
+
+        self.assertEquals(expected, seq)
