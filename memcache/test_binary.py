@@ -4,7 +4,7 @@ import struct
 from zope.interface import implements
 
 from twisted.trial import unittest
-from twisted.internet import interfaces
+from twisted.internet import interfaces, defer
 
 from memcache import binary, constants
 
@@ -109,8 +109,12 @@ class TestTransport(object):
 
 class TestServer(object):
 
+    def __init__(self):
+        self.responses = []
+
     def noop(self, req, data):
-        pass
+        for d, r in reversed(self.responses):
+            d.callback(r)
 
     def get(self, req, data):
         return binary.GetResponse(req, 9282, data='response')
@@ -121,6 +125,14 @@ class TestServer(object):
     def quit(self, req, data):
         sys.exit(0)
 
+    def getq(self, req, data):
+        """quiet gets just queue up and replay backwards on a noop"""
+        d = defer.Deferred()
+        data = 'response %d' % len(self.responses)
+        self.responses.append((d, binary.GetResponse(req, 8259, key=req.key,
+                                                     data=data)))
+        return d
+
 testServer = TestServer()
 
 class TestServerProtocol(binary.BinaryServerProtocol):
@@ -128,6 +140,7 @@ class TestServerProtocol(binary.BinaryServerProtocol):
     handlers = {
         constants.CMD_NOOP: testServer.noop,
         constants.CMD_GET:  testServer.get,
+        constants.CMD_GETQ: testServer.getq,
         constants.CMD_SET:  testServer.set,
         constants.CMD_QUIT: testServer.quit
         }
@@ -147,13 +160,14 @@ class BinaryServerProtocolTest(unittest.TestCase):
         self.prot.makeConnection(self.trans)
 
     def assertResponses(self, responses):
+        self.assertEquals(len(self.prot.responses), len(responses))
         for g,e in zip(self.prot.responses, responses):
             for k in e:
                 if '.' in k:
                     gotval = reduce(getattr, k.split('.'), g)
                 else:
                     gotval = getattr(g, k)
-                self.assertEquals(e[k], gotval)
+                self.assertEquals(e[k], gotval, "For opaque=%d" % g.req.opaque)
 
     def mkReq(self, op, key='', extra='', data='', opaque=0, cas=0):
         keylen = len(key)
@@ -161,13 +175,13 @@ class BinaryServerProtocolTest(unittest.TestCase):
         bodylen = len(data)
         pkt = struct.pack(binary.REQ_PKT_FMT, binary.REQ_MAGIC_BYTE,
                           op, keylen, extralen, 0,
-                          bodylen, opaque, cas)
+                          bodylen + extralen, opaque, cas)
 
-        return pkt + extra + data
+        return pkt + extra + key + data
 
     def test_noop(self):
-        self.prot.dataReceived(self.mkReq(binary.CMD_NOOP))
-        self.assertResponses([{'req.opcode': binary.CMD_NOOP, 'status': 0}])
+        self.prot.dataReceived(self.mkReq(constants.CMD_NOOP))
+        self.assertResponses([{'req.opcode': constants.CMD_NOOP, 'status': 0}])
 
     def test_quit(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_QUIT))
@@ -175,17 +189,25 @@ class BinaryServerProtocolTest(unittest.TestCase):
 
     def test_unhandled(self):
         self.prot.dataReceived(self.mkReq(binary.CMD_STAT))
-        self.assertResponses([{'status': binary.ERR_UNKNOWN_CMD}])
+        self.assertResponses([{'status': constants.ERR_UNKNOWN_CMD}])
 
     def test_get(self):
-        self.prot.dataReceived(self.mkReq(binary.CMD_GET, key='x'))
+        self.prot.dataReceived(self.mkReq(constants.CMD_GET, key='x'))
         self.assertResponses([{'data': 'response'}])
+
+    def test_ordering(self):
+        self.prot.dataReceived(self.mkReq(constants.CMD_GETQ, key='y', opaque=2))
+        self.prot.dataReceived(self.mkReq(constants.CMD_GETQ, key='x', opaque=1))
+        self.prot.dataReceived(self.mkReq(constants.CMD_NOOP))
+        self.assertResponses([{'req.opaque': 1, 'req.opcode': constants.CMD_GETQ, 'key': 'x'},
+                              {'req.opaque': 2, 'req.opcode': constants.CMD_GETQ, 'key': 'y'},
+                              {'req.opcode': constants.CMD_NOOP}])
 
     def test_set(self):
         extra = struct.pack(binary.SET_PKT_FMT, 8184, 1984)
         self.prot.dataReceived(self.mkReq(binary.CMD_SET, key='x',
                                           extra=extra, data='y'))
-        self.assertResponses([{'status': binary.ERR_NOT_STORED}])
+        self.assertResponses([{'status': constants.ERR_NOT_STORED}])
 
     def test_bad_req(self):
         self.prot.dataReceived("x" * constants.MIN_RECV_PACKET)
