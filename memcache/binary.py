@@ -77,6 +77,11 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
 
     handlers = {}
 
+    def makeConnection(self, trans):
+        stateful.StatefulProtocol.makeConnection(self, trans)
+        self.__todo = deque()
+        self.__responses = {}
+
     def getInitialState(self):
         self.currentReq = None
         return self._headerReceived, MIN_RECV_PACKET
@@ -105,16 +110,27 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
                                  - self.currentReq.extralen
                                  - self.currentReq.keylen)
 
+    def _sendResponses(self):
+        while self.__todo and self.__todo[0].called:
+            d = self.__todo.popleft()
+            res = self.__responses[d]
+            del self.__responses[d]
+            self._respond(res)
+        assert len(self.__responses) <= len(self.__todo)
+
     def _completed(self, data):
         request = self.currentReq
         d = defer.maybeDeferred(self.handlers.get(request.opcode,
                                                   self.unknownCommand),
                                 request, data)
 
+        self.__todo.append(d)
+
         def _c(res, req):
             if not res:
                 res = Response(req)
-            self._respond(res)
+            self.__responses[d] = res
+            self._sendResponses()
 
         def _e(e, req):
             e.trap(MemcachedError)

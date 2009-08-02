@@ -196,8 +196,8 @@ class BinaryServerProtocolTest(unittest.TestCase):
         self.assertResponses([{'data': 'response'}])
 
     def test_ordering(self):
-        self.prot.dataReceived(self.mkReq(constants.CMD_GETQ, key='y', opaque=2))
         self.prot.dataReceived(self.mkReq(constants.CMD_GETQ, key='x', opaque=1))
+        self.prot.dataReceived(self.mkReq(constants.CMD_GETQ, key='y', opaque=2))
         self.prot.dataReceived(self.mkReq(constants.CMD_NOOP))
         self.assertResponses([{'req.opaque': 1, 'req.opcode': constants.CMD_GETQ, 'key': 'x'},
                               {'req.opaque': 2, 'req.opcode': constants.CMD_GETQ, 'key': 'y'},
