@@ -130,13 +130,11 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
             if not res:
                 res = Response(req)
             self.__responses[d] = res
-            self._sendResponses()
 
         def _e(e, req):
             e.trap(MemcachedError)
             self.__responses[d] = Response(req, status=e.value.code,
                                            data=e.value.msg)
-            self._sendResponses()
 
         def _exit(e):
             e.trap(SystemExit, MemcachedDisconnect)
@@ -144,6 +142,7 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
 
         d.addCallback(_c, self.currentReq)
         d.addErrback(_e, self.currentReq)
+        d.addCallback(lambda x: self._sendResponses())
         d.addErrback(_exit)
         d.addErrback(log.err)
 
