@@ -111,7 +111,7 @@ class BinaryServerProtocol(stateful.StatefulProtocol):
                                  - self.currentReq.keylen)
 
     def _sendResponses(self):
-        while self.__todo and self.__todo[0].called:
+        while self.__todo and self.__responses.has_key(self.__todo[0]):
             d = self.__todo.popleft()
             res = self.__responses[d]
             del self.__responses[d]
