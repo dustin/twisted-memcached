@@ -163,10 +163,7 @@ class BinaryServerProtocolTest(unittest.TestCase):
         self.assertEquals(len(self.prot.responses), len(responses))
         for g,e in zip(self.prot.responses, responses):
             for k in e:
-                if '.' in k:
-                    gotval = reduce(getattr, k.split('.'), g)
-                else:
-                    gotval = getattr(g, k)
+                gotval = reduce(getattr, k.split('.'), g)
                 self.assertEquals(e[k], gotval, "For opaque=%d" % g.req.opaque)
 
     def mkReq(self, op, key='', extra='', data='', opaque=0, cas=0):
