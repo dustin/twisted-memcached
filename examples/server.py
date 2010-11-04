@@ -19,7 +19,14 @@ class DictStorage(object):
     def doGet(self, req, data):
         try:
             exp, flags, cas, val = self.d[req.key]
-            return binary.GetResponse(req, flags, cas, data=val)
+            res = binary.GetResponse(req, flags, cas, data=val)
+            # If the magic 'slow' is requested, slow down.
+            if req.key == 'slow':
+                rv = defer.Deferred()
+                reactor.callLater(5, rv.callback, res)
+                return rv
+            else:
+                return res
         except KeyError:
             raise binary.MemcachedNotFound()
 
