@@ -11,34 +11,39 @@ from twisted.internet import reactor, protocol, defer, task
 
 from memcache import binary, constants
 
+def _requireKey(f):
+    # Helper for validating keys in dict storage.
+    def g(self, req, data):
+        if req.key in self.d:
+            return f(self, req, data)
+        else:
+            raise binary.MemcachedNotFound()
+    return g
+
 class DictStorage(object):
 
     def __init__(self):
         self.d = {}
 
+    @_requireKey
     def doGet(self, req, data):
-        try:
-            exp, flags, cas, val = self.d[req.key]
-            res = binary.GetResponse(req, flags, cas, data=val)
-            # If the magic 'slow' is requested, slow down.
-            if req.key == 'slow':
-                rv = defer.Deferred()
-                reactor.callLater(5, rv.callback, res)
-                return rv
-            else:
-                return res
-        except KeyError:
-            raise binary.MemcachedNotFound()
+        exp, flags, cas, val = self.d[req.key]
+        res = binary.GetResponse(req, flags, cas, data=val)
+        # If the magic 'slow' is requested, slow down.
+        if req.key == 'slow':
+            rv = defer.Deferred()
+            reactor.callLater(5, rv.callback, res)
+            return rv
+        else:
+            return res
 
     def doSet(self, req, data):
         flags, exp = struct.unpack(constants.SET_PKT_FMT, req.extra)
         self.d[req.key] = (exp, flags, 0, data)
 
+    @_requireKey
     def doDelete(self, req, data):
-        if self.d.has_key(req.key):
-            del self.d[req.key]
-        else:
-            raise binary.MemcachedNotFound()
+        del self.d[req.key]
 
 storage = DictStorage()
 
