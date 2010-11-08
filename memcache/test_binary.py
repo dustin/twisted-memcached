@@ -49,7 +49,8 @@ class ResponseTest(unittest.TestCase):
         seq = res.toSequence()
         expected = [struct.pack(binary.RES_PKT_FMT, binary.RES_MAGIC_BYTE,
                                 res.req.opcode, len(key), 0, 0, 0,
-                                len(data), opaque, cas),
+                                len(key) + len(data), opaque, cas),
+                    key,
                     '',
                     data]
 
@@ -75,8 +76,9 @@ class GetResponseTest(unittest.TestCase):
         esize = struct.calcsize(binary.GET_RES_FMT)
         expected = [struct.pack(binary.RES_PKT_FMT, binary.RES_MAGIC_BYTE,
                                 res.req.opcode, len(key), esize, 0, 0,
-                                len(data) + esize,
+                                len(key) + len(data) + esize,
                                 opaque, cas),
+                    key,
                     struct.pack(binary.GET_RES_FMT, flags),
                     data]
 

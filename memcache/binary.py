@@ -40,9 +40,9 @@ class Response(object):
         req = self.req
         hdr = struct.pack(RES_PKT_FMT, RES_MAGIC_BYTE, req.opcode,
                           len(res.key), len(res.extra), 0, res.status,
-                          len(res.data) + len(res.extra), req.opaque,
+                          len(res.key) + len(res.data) + len(res.extra), req.opaque,
                           res.cas)
-        return [hdr, self.extra, self.data]
+        return [hdr, self.key, self.extra, self.data]
 
 class GetResponse(Response):
 
