@@ -37,13 +37,45 @@ class DictStorage(object):
         else:
             return res
 
+    def doGetQ(self, req, data):
+        try:
+            return self.doGet(req, data)
+        except binary.MemcachedNotFound:
+            return binary.EmptyResponse()
+
     def doSet(self, req, data):
         flags, exp = struct.unpack(constants.SET_PKT_FMT, req.extra)
         self.d[req.key] = (exp, flags, 0, data)
 
+    def doAdd(self, req, data):
+        if req.key in self.d:
+            raise binary.MemcachedExists()
+        else:
+            flags, exp = struct.unpack(constants.SET_PKT_FMT, req.extra)
+            self.d[req.key] = (exp, flags, 0, data)
+
+    @_requireKey
+    def doAppend(self, req, newdata):
+        exp, flags, cas, olddata = self.d[req.key]
+        self.d[req.key] = (exp, flags, 0, olddata + newdata)
+
+    @_requireKey
+    def doPrepend(self, req, newdata):
+        exp, flags, cas, olddata = self.d[req.key]
+        self.d[req.key] = (exp, flags, 0, newdata + olddata)
+
     @_requireKey
     def doDelete(self, req, data):
         del self.d[req.key]
+
+    def doFlush(self, req, data):
+        self.d = {}
+
+    def doStats(self, req, data):
+        r = binary.MultiResponse()
+        r.add(binary.Response(req, key='version', data='blah'))
+        r.add(binary.Response(req, key='', data=''))
+        return r
 
 storage = DictStorage()
 
@@ -53,12 +85,22 @@ def ex(*a):
     # this also works, but apparently confuses people.
     # sys.exit(0)
 
+def doNoop(req, data):
+    return binary.Response(req)
+
 class ExampleBinaryServer(binary.BinaryServerProtocol):
 
     handlers = {
         constants.CMD_GET: storage.doGet,
+        constants.CMD_GETQ: storage.doGetQ,
         constants.CMD_SET: storage.doSet,
+        constants.CMD_ADD: storage.doAdd,
+        constants.CMD_APPEND: storage.doAppend,
+        constants.CMD_PREPEND: storage.doPrepend,
         constants.CMD_DELETE: storage.doDelete,
+        constants.CMD_STAT: storage.doStats,
+        constants.CMD_FLUSH: storage.doFlush,
+        constants.CMD_NOOP: doNoop,
         constants.CMD_QUIT: ex
         }
 

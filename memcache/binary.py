@@ -44,6 +44,16 @@ class Response(object):
                           res.cas)
         return [hdr, self.key, self.extra, self.data]
 
+class MultiResponse(list):
+    def add(self, r):
+        self.extend(r.toSequence())
+    def toSequence(self):
+        return self
+
+class EmptyResponse(object):
+    def toSequence(self):
+        return []
+
 class GetResponse(Response):
 
     def __init__(self, req, flags, cas=0, status=0, key='', data=''):
